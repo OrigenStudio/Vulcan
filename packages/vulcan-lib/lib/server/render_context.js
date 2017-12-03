@@ -79,8 +79,8 @@ webAppConnectHandlersUse(Meteor.bindEnvironment(function initRenderContextMiddle
   const loginToken = req.cookies && req.cookies.meteor_login_token;
   const apolloClient = createApolloClient({ loginToken: loginToken });
   let actions = {};
-  let reducers = { apollo: apolloClient.reducer() };
-  let middlewares = [Utils.defineName(apolloClient.middleware(), 'apolloClientMiddleware')];
+  let reducers = {};
+  let middlewares = [];
 
   // renderContext object
   req.renderContext = {

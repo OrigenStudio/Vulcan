@@ -1,6 +1,7 @@
 import React from 'react';
 import Helmet from 'react-helmet';
 import { getDataFromTree, ApolloProvider } from 'react-apollo';
+import { Provider } from  'react-redux';
 
 import { Meteor } from 'meteor/meteor';
 
@@ -50,7 +51,13 @@ Meteor.startup(() => {
       store.reload();
       store.dispatch({ type: '@@nova/INIT' }) // the first dispatch will generate a newDispatch function from middleware
       const app = runCallbacks('router.server.wrapper', appGenerator(), { req, res, store, apolloClient });
-      return <ApolloProvider store={store} client={apolloClient}>{app}</ApolloProvider>;
+      return (
+        <ApolloProvider client={apolloClient}>
+          <Provider store={store}>
+            {app}
+          </Provider>
+        </ApolloProvider>
+      );
     },
     preRender(req, res, app) {
       runCallbacks('router.server.preRender', { req, res, app });
@@ -58,7 +65,7 @@ Meteor.startup(() => {
     },
     dehydrateHook(req, res) {
       const context = runCallbacks('router.server.dehydrate', getRenderContext(), { req, res });
-      return context.apolloClient.store.getState();
+      return context.apolloClient.extract();
     },
     postRender(req, res) {
       runCallbacks('router.server.postRender', { req, res });

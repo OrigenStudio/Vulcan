@@ -15,8 +15,8 @@ export const initContext = () => {
   const history = browserHistory;
   const loginToken = global.localStorage['Meteor.loginToken'];
   const apolloClient = createApolloClient();
-  addReducer({ apollo: apolloClient.reducer() });
-  addMiddleware(apolloClient.middleware());
+  // FIXME not sure how this needs to be migrated
+  // addMiddleware(apolloClient.middleware());
 
   // init context
   context = {

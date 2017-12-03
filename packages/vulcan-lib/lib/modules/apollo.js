@@ -1,17 +1,26 @@
-import ApolloClient, { createNetworkInterface, createBatchingNetworkInterface } from 'apollo-client';
+import ApolloClient from 'apollo-client';
+import { InMemoryCache } from 'apollo-cache-inmemory';
+import { createHttpLink } from 'apollo-link-http';
+import { BatchHttpLink } from 'apollo-link-batch-http';
+import { setContext } from 'apollo-link-context';
 import 'cross-fetch/polyfill';
 import { Meteor } from 'meteor/meteor';
 import { getSetting, registerSetting } from './settings.js';
 import { getFragmentMatcher } from './fragment_matcher.js';
 import { Callbacks, runCallbacks } from './callbacks.js';
 
-registerSetting('developmentServerIp', Meteor.absoluteUrl(), 'Development server IP');
+registerSetting(
+  'developmentServerIp',
+  Meteor.absoluteUrl(),
+  'Development server IP',
+);
 
 const defaultNetworkInterfaceConfig = {
   path: '/graphql', // default graphql server endpoint
   opts: {}, // additional fetch options like `credentials` or `headers`
   useMeteorAccounts: true, // if true, send an eventual Meteor login token to identify the current user with every request
-  batchingInterface: true, // use a BatchingNetworkInterface by default instead of a NetworkInterface
+  batchingInterface: false, // using createHttpLink instead of BatchHttpLink, it used to be the other way around.
+  //BatchHttpLink doesn't seem to have the same API as createHttpLink. See https://www.apollographql.com/docs/link/links/batch-http.html
   batchInterval: 10, // default batch interval
 };
 
@@ -24,13 +33,14 @@ const createMeteorNetworkInterface = (givenConfig = {}) => {
     path = path.slice(1);
   }
 
-  const uri = Meteor.absoluteUrl(
-    path,
-    { rootUrl: getSetting('developmentServerIp', Meteor.absoluteUrl()) },
-  );
+  const uri = Meteor.absoluteUrl(path, {
+    rootUrl: getSetting('developmentServerIp', Meteor.absoluteUrl()),
+  });
 
   // allow the use of a batching network interface; if the options.batchingInterface is not specified, fallback to the standard network interface
-  const interfaceToUse = config.batchingInterface ? createBatchingNetworkInterface : createNetworkInterface;
+  const interfaceToUse = config.batchingInterface
+    ? BatchHttpLink
+    : createHttpLink;
 
   // default interface options
   const interfaceOptions = {
@@ -50,56 +60,53 @@ const createMeteorNetworkInterface = (givenConfig = {}) => {
     interfaceOptions.opts = config.opts;
   }
 
-  const networkInterface = interfaceToUse(interfaceOptions);
-
   if (config.useMeteorAccounts) {
-    networkInterface.use([{
-      applyBatchMiddleware(request, next) {
-        const currentUserToken = Meteor.isClient ? global.localStorage['Meteor.loginToken'] : config.loginToken;
+    const middlewareLink = setContext(() => {
+      const currentUserToken = Meteor.isClient
+        ? global.localStorage['Meteor.loginToken']
+        : config.loginToken;
 
-        if (!currentUserToken) {
-          next();
-          return;
-        }
+      if (!currentUserToken) {
+        return {};
+      } else {
+        return {
+          headers: {
+            authorization: currentUserToken || null,
+          },
+        };
+      }
+    });
 
-        if (!request.options.headers) {
-          request.options.headers = new Headers();
-        }
-
-        request.options.headers.Authorization = currentUserToken;
-
-        next();
-      },
-    }]);
+    return middlewareLink.concat(interfaceToUse(interfaceOptions));
   }
 
-  return networkInterface;
+  return interfaceToUse(interfaceOptions);
 };
 
-const meteorClientConfig = networkInterfaceConfig => {
+const cache = new InMemoryCache({
+  // Default to using Mongo _id, must use _id for queries.
+  dataIdFromObject: result => {
+    if (result._id && result.__typename) {
+      const dataId = result.__typename + result._id;
+      return dataId;
+    }
+    return null;
+  },
+  addTypename: true,
+  fragmentMatcher: getFragmentMatcher(),
+});
 
+const meteorClientConfig = networkInterfaceConfig => {
   return {
     ssrMode: Meteor.isServer,
-    networkInterface: createMeteorNetworkInterface(networkInterfaceConfig),
+    link: createMeteorNetworkInterface(networkInterfaceConfig),
     queryDeduplication: true, // http://dev.apollodata.com/core/network.html#query-deduplication
-    addTypename: true,
-    fragmentMatcher: getFragmentMatcher(),
-
-    // Default to using Mongo _id, must use _id for queries.
-    dataIdFromObject(result) {
-      if (result._id && result.__typename) {
-        const dataId = result.__typename + result._id;
-        return dataId;
-      }
-      return null;
-    },
-  }
+    cache,
+  };
 };
 
 export const createApolloClient = options => {
-
   runCallbacks('apolloclient.init.before');
 
   return new ApolloClient(meteorClientConfig(options));
-
 };
