@@ -7,7 +7,7 @@ import merge from 'lodash/merge';
 import find from 'lodash/find';
 import isObjectLike from 'lodash/isObjectLike';
 import isEqual from 'lodash/isEqual';
-import { isEmptyValue } from '../modules/utils.js';
+import * as FormUtils from '../modules/utils.js';
 
 class FormComponent extends Component {
   constructor(props) {
@@ -82,7 +82,7 @@ class FormComponent extends Component {
   */
   handleChange = (name, value) => {
     // if value is an empty string, delete the field
-    if (value === '') {
+    if (this.props.isEmptyValue(value)) {
       value = null;
     }
     // if this is a number field, convert value before sending it up to Form
@@ -120,7 +120,15 @@ class FormComponent extends Component {
   getValue = props => {
     let value;
     const p = props || this.props;
-    const { document, currentValues, defaultValue, datatype } = p;
+    const {
+      document,
+      currentValues,
+      defaultValue,
+      emptyValue,
+      isEmptyValue,
+      shouldMergeValue,
+      mergeValue,
+    } = p;
     // for intl field fetch the actual field value by adding .value to the path
     const path = p.locale ? `${this.getPath(p)}.value` : this.getPath(p);
     const documentValue = get(document, path);
@@ -128,20 +136,14 @@ class FormComponent extends Component {
     const isDeleted = p.deletedValues.includes(path);
 
     if (isDeleted) {
-      value = '';
+      value = emptyValue;
     } else {
-      if (p.locale) {
-        // note: intl fields are of type Object but should be treated as Strings
-        value = currentValue || documentValue || '';
-      } else if (Array.isArray(currentValue) && find(datatype, ['type', Array])) {
-        // for object and arrays, use lodash's merge
-        // if field type is array, use [] as merge seed to force result to be an array as well
-        value = merge([], documentValue, currentValue);
-      } else if (isObjectLike(currentValue) && find(datatype, ['type', Object])) {
-        value = merge({}, documentValue, currentValue);
+
+      if (shouldMergeValue({ currentValue, documentValue, ...p })) {
+        value = mergeValue({ currentValue, documentValue, ...p });
       } else {
-        // note: value has to default to '' to make component controlled
-        value = '';
+        // note: value has to default to emptyValue to make component controlled
+        value = emptyValue;
         if (typeof currentValue !== 'undefined' && currentValue !== null) {
           value = currentValue;
         } else if (typeof documentValue !== 'undefined' && documentValue !== null) {
@@ -315,6 +317,8 @@ FormComponent.propTypes = {
   name: PropTypes.string.isRequired,
   label: PropTypes.string,
   value: PropTypes.any,
+  emptyValue: PropTypes.any,
+  defaultvalue: PropTypes.any,
   placeholder: PropTypes.string,
   prefilledValue: PropTypes.any,
   options: PropTypes.any,
@@ -331,6 +335,17 @@ FormComponent.propTypes = {
   addToDeletedValues: PropTypes.func,
   clearFieldErrors: PropTypes.func.isRequired,
   currentUser: PropTypes.object,
+  isEmptyValue: PropTypes.func,
+  shouldMergeValue: PropTypes.func,
+  mergeValue: PropTypes.func,
+};
+
+FormComponent.defaultProps = {
+  emptyValue: '',
+  defaultValue: '',
+  shouldMergeValue: FormUtils.shouldMergeValue,
+  mergeValue: FormUtils.mergeValue,
+  isEmptyValue: FormUtils.isEmptyValue,
 };
 
 FormComponent.contextTypes = {
