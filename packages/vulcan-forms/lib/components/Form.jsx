@@ -736,14 +736,14 @@ class SmartForm extends Component {
   };
 
   newMutationSuccessCallback = result => {
-    this.mutationSuccessCallback(result, 'new');
+    this.mutationSuccessCallback(result, 'new', { clearCurrentValues: true });
   };
 
   editMutationSuccessCallback = result => {
     this.mutationSuccessCallback(result, 'edit');
   };
 
-  mutationSuccessCallback = (result, mutationType) => {
+  mutationSuccessCallback = (result, mutationType, { clearCurrentValues } = {}) => {
 
     this.setState(prevState => ({ disabled: false }));
     const document = result.data[Object.keys(result.data)[0]].data; // document is always on first property
@@ -755,7 +755,7 @@ class SmartForm extends Component {
     // (we are in an async callback, everything can happen!)
     if (this.form) {
       this.form.reset(this.getDocument());
-      this.clearForm({ clearErrors: true, clearCurrentValues: true, clearDeletedValues: true, document });
+      this.clearForm({ clearErrors: true, clearCurrentValues, clearDeletedValues: true, document });
     }
 
     // run document through mutation success callbacks
