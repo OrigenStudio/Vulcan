@@ -6,7 +6,7 @@ import { runCallbacks, runCallbacksAsync } from './callbacks.js';
 import { getSetting, registerSetting } from './settings.js';
 import { registerFragment, getDefaultFragmentText } from './fragments.js';
 import escapeStringRegexp from 'escape-string-regexp';
-import { validateIntlField, getIntlString } from './intl';
+import { validateIntlField, getIntlString, isIntlField } from './intl';
 
 const wrapAsync = (Meteor.wrapAsync)? Meteor.wrapAsync : Meteor._wrapAsync;
 // import { debug } from './debug.js';
@@ -131,31 +131,48 @@ export const createCollection = options => {
   // decorate collection with options
   collection.options = options;
 
-  // add typeName
+  // add typeName if missing
   collection.typeName = typeName;
+  collection.options.typeName = typeName;
 
+  // add collectionName if missing
+  collection.collectionName = collectionName;
+  collection.options.collectionName = collectionName;
+  
   // add views
   collection.views = [];
 
   // generate foo_intl fields
   Object.keys(schema).forEach(fieldName => {
     const fieldSchema = schema[fieldName];
-    if (fieldSchema.intl || (fieldSchema.type && fieldSchema.type.name === 'IntlString')) {
+    if (isIntlField(fieldSchema)) {
 
       // we have at least one intl field
       hasIntlFields = true;
 
+      // remove `intl` to avoid treating new _intl field as a field to internationalize
+      const { intl, ...propertiesToCopy } = schema[fieldName];
+
       schema[`${fieldName}_intl`] = {
-        ...schema[fieldName], // copy properties from regular field
+        ...propertiesToCopy, // copy properties from regular field
         hidden: true,
         type: Array,
-        custom: validateIntlField,
+        isIntlData: true,
       }
+
+      delete schema[`${fieldName}_intl`].intl;
+
       schema[`${fieldName}_intl.$`] = {
         type: getIntlString(),
       }
 
-      // make non-intl field optional
+      // if original field is required, enable custom validation function instead of `optional` property
+      if (!schema[fieldName].optional) {
+        schema[`${fieldName}_intl`].optional = true;
+        schema[`${fieldName}_intl`].custom = validateIntlField;
+      }
+
+      // make original non-intl field optional
       schema[fieldName].optional = true;
     }
   });

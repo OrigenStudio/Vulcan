@@ -15,12 +15,12 @@ And wraps the Form component with:
 
 Or: 
 
-- withDocument
-- withEdit
-- withRemove
+- withSingle
+- withUpdate
+- withDelete
 
-(When wrapping with withDocument, withEdit, and withRemove, a special Loader
-component is also added to wait for withDocument's loading prop to be false)
+(When wrapping with withSingle, withUpdate, and withDelete, a special Loader
+component is also added to wait for withSingle's loading prop to be false)
 
 */
 
@@ -35,13 +35,13 @@ import {
   withCurrentUser,
   Utils,
   withNew,
-  withEdit,
-  withRemove,
+  withUpdate,
+  withDelete,
   getFragment,
   getCollection,
 } from 'meteor/vulcan:core';
 import gql from 'graphql-tag';
-import { withDocument } from 'meteor/vulcan:core';
+import { withSingle } from 'meteor/vulcan:core';
 import { graphql } from 'react-apollo';
 
 class FormWrapper extends PureComponent {
@@ -67,22 +67,27 @@ class FormWrapper extends PureComponent {
     return this.props.documentId || this.props.slug ? "edit" : "new";
   }
 
+  // filter out fields with "." or "$"
+  getValidFields() {
+    return Object.keys(this.getSchema()).filter(fieldName => !fieldName.includes('$') && !fieldName.includes('.'));
+  }
+
   getReadableFields() {
     const schema = this.getSchema();
     // OpenCRUD backwards compatibility
-    return Object.keys(this.getSchema()).filter(fieldName => schema[fieldName].canRead || schema[fieldName].viewableBy);
+    return this.getValidFields().filter(fieldName => schema[fieldName].canRead || schema[fieldName].viewableBy);
   }
 
   getCreateableFields() {
     const schema = this.getSchema();
     // OpenCRUD backwards compatibility
-    return Object.keys(this.getSchema()).filter(fieldName => schema[fieldName].canCreate || schema[fieldName].insertableBy);
+    return this.getValidFields().filter(fieldName => schema[fieldName].canCreate || schema[fieldName].insertableBy);
   }
 
   getUpdatetableFields() {
     const schema = this.getSchema();
     // OpenCRUD backwards compatibility
-    return Object.keys(this.getSchema()).filter(fieldName => schema[fieldName].canUpdate || schema[fieldName].editableBy);
+    return this.getValidFields().filter(fieldName => schema[fieldName].canUpdate || schema[fieldName].editableBy);
   }
 
   // get fragment used to decide what data to load from the server to populate the form,
@@ -108,11 +113,15 @@ class FormWrapper extends PureComponent {
       mutationFields = _.intersection(mutationFields, fields);
     }
     
+    const convertFields = field => {
+      return field.slice(-5) === '_intl' ? `${field}{ locale value }`: field;
+    }
+
     // generate query fragment based on the fields that can be edited. Note: always add _id.
     const generatedQueryFragment = gql`
       fragment ${fragmentName} on ${this.getCollection().typeName} {
         _id
-        ${queryFields.join('\n')}
+        ${queryFields.map(convertFields).join('\n')}
       }
     `
 
@@ -120,7 +129,7 @@ class FormWrapper extends PureComponent {
     const generatedMutationFragment = gql`
       fragment ${fragmentName} on ${this.getCollection().typeName} {
         _id
-        ${mutationFields.join('\n')}
+        ${mutationFields.map(convertFields).join('\n')}
       }
     `
 
@@ -172,7 +181,7 @@ class FormWrapper extends PureComponent {
       schema: this.getSchema(),
     };
 
-    // options for withDocument HoC
+    // options for withSingle HoC
     const queryOptions = {
       queryName: `${prefix}FormQuery`,
       collection: this.getCollection(),
@@ -183,7 +192,7 @@ class FormWrapper extends PureComponent {
       pollInterval: 0, // no polling, only load data once
     };
 
-    // options for withNew, withEdit, and withRemove HoCs
+    // options for withNew, withUpdate, and withDelete HoCs
     const mutationOptions = {
       collection: this.getCollection(),
       fragment: mutationFragment,
@@ -204,16 +213,16 @@ class FormWrapper extends PureComponent {
     };
     Loader.displayName = `withLoader(Form)`;
 
-    // if this is an edit from, load the necessary data using the withDocument HoC
+    // if this is an edit from, load the necessary data using the withSingle HoC
     if (this.getFormType() === 'edit') {
 
       WrappedComponent = compose(
-        withDocument(queryOptions),
-        withEdit(mutationOptions),
-        withRemove(mutationOptions)
+        withSingle(queryOptions),
+        withUpdate(mutationOptions),
+        withDelete(mutationOptions)
       )(Loader);
 
-      return <WrappedComponent documentId={this.props.documentId} slug={this.props.slug} />
+      return <WrappedComponent selector={{ documentId: this.props.documentId, slug: this.props.slug }}/>
 
     } else {
 

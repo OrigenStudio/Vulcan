@@ -53,9 +53,10 @@ const schema = {
     type: String,
     optional: true,
     canRead: ['guests'],
-    canCreate: ['guests'],
+    canUpdate: ['admins'],
+    canCreate: ['members'],
     onInsert: user => {
-      if (user.services && user.services.twitter && user.services.twitter.screenName) {
+      if ((!user.username) && user.services && user.services.twitter && user.services.twitter.screenName) {
         return user.services.twitter.screenName;
       }
     },
@@ -110,7 +111,7 @@ const schema = {
     type: Object,
     optional: true,
     blackbox: true,
-    canCreate: ['guests'],
+    canCreate: ['members'],
   },
   // // telescope-specific data, kept for backward compatibility and migration purposes
   // telescope: {
@@ -149,7 +150,7 @@ const schema = {
     regEx: SimpleSchema.RegEx.Email,
     mustComplete: true,
     control: "text",
-    canCreate: ['guests'],
+    canCreate: ['members'],
     canUpdate: ['members'],
     canRead: ownsOrIsAdmin,
     order: 20,
@@ -202,7 +203,7 @@ const schema = {
       fieldName: 'avatarUrl',
       type: 'String',
       resolver: async (user, args, { Users }) => {
- 
+
         if (_.isEmpty(user)) return null;
 
         if (user.avatarUrl) {
@@ -213,7 +214,7 @@ const schema = {
           const fullUser = await Users.loader.load(user._id);
           return Users.avatar.getUrl(fullUser);
         }
-        
+
       }
     }
   },
@@ -232,9 +233,9 @@ const schema = {
       return Utils.getUnusedSlugByCollectionName('Users', basicSlug);
     }
   },
-    /**
-    The user's Twitter username
-  */
+  /**
+  The user's Twitter username
+*/
   twitterUsername: {
     type: String,
     optional: true,
@@ -269,7 +270,7 @@ const schema = {
     form: {
       options: function () {
         const groups = _.without(_.keys(getCollection('Users').groups), "guests", "members", "admins");
-        return groups.map(group => {return {value: group, label: group};});
+        return groups.map(group => { return { value: group, label: group }; });
       }
     },
   },
@@ -289,7 +290,7 @@ const schema = {
       resolver: (user, args, { Users }) => {
         return Users.getProfileUrl(user, true);
       },
-    }  
+    }
   },
 
   editUrl: {
@@ -301,7 +302,7 @@ const schema = {
       resolver: (user, args, { Users }) => {
         return Users.getEditUrl(user, true);
       },
-    }  
+    }
   }
 
 };

@@ -9,7 +9,7 @@ import SimpleSchema from 'simpl-schema';
 Vulcan = {};
 
 // eslint-disable-next-line no-undef
-Vulcan.VERSION = '1.11.2';
+Vulcan.VERSION = '1.12.3';
 
 // ------------------------------------- Schemas -------------------------------- //
 
@@ -53,6 +53,7 @@ SimpleSchema.extendOptions([
   'orderable', // field can be used to order results when querying for data
 
   'intl', // set to `true` to make a field international
+  'isIntlData', // marker for the actual schema fields that hold intl strings
 ]);
 
 // eslint-disable-next-line no-undef

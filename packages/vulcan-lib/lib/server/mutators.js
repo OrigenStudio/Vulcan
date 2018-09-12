@@ -61,7 +61,7 @@ export const createMutator = async ({ collection, document, data, currentUser, v
     newDocument = await runCallbacks({ name: `${typeName.toLowerCase()}.create.validate`, iterator: newDocument, properties: { currentUser, validationErrors, collection }});
     newDocument = await runCallbacks({ name: `*.create.validate`, iterator: newDocument, properties: { currentUser, validationErrors, collection }});
     // OpenCRUD backwards compatibility
-    newDocument = runCallbacks(`${collectionName.toLowerCase()}.new.validate`, newDocument, currentUser, validationErrors);
+    newDocument = await runCallbacks(`${collectionName.toLowerCase()}.new.validate`, newDocument, currentUser, validationErrors);
     
     if (validationErrors.length) {
       const NewDocumentValidationError = createError('app.validation_error', {message: 'app.new_document_validation_error'});
@@ -89,8 +89,9 @@ export const createMutator = async ({ collection, document, data, currentUser, v
   for(let fieldName of Object.keys(schema)) {
     let autoValue;
     if (schema[fieldName].onCreate) {
+      // OpenCRUD backwards compatibility: keep both newDocument and data for now, but phase our newDocument eventually
       // eslint-disable-next-line no-await-in-loop
-      autoValue = await schema[fieldName].onCreate({ newDocument: clone(newDocument), currentUser });
+      autoValue = await schema[fieldName].onCreate({ newDocument: clone(newDocument), data: clone(newDocument), currentUser });
     } else if (schema[fieldName].onInsert) {
       // OpenCRUD backwards compatibility
       // eslint-disable-next-line no-await-in-loop
@@ -144,13 +145,14 @@ export const createMutator = async ({ collection, document, data, currentUser, v
 }
 
 
-export const updateMutator = async ({ collection, selector, data, set = {}, unset = {}, currentUser, validate, context, document }) => {
+export const updateMutator = async ({ collection, documentId, selector, data, set = {}, unset = {}, currentUser, validate, context, document }) => {
 
   const { collectionName, typeName } = collection.options;
 
   const schema = collection.simpleSchema()._schema;
 
   // OpenCRUD backwards compatibility
+  selector = selector || { _id: documentId };
   data = data || modifierToData({ $set: set, $unset: unset });
 
   if (isEmpty(selector)) {
@@ -178,7 +180,7 @@ export const updateMutator = async ({ collection, selector, data, set = {}, unse
     data = await runCallbacks({ name: `${typeName.toLowerCase()}.update.validate`, iterator: data, properties: { document, currentUser, validationErrors, collection }});
     data = await runCallbacks({ name: `*.update.validate`, iterator: data, properties: { document, currentUser, validationErrors, collection }});
     // OpenCRUD backwards compatibility
-    runCallbacks(`${collectionName.toLowerCase()}.edit.validate`, dataToModifier(data), document, currentUser, validationErrors);
+    data = modifierToData(await runCallbacks(`${collectionName.toLowerCase()}.edit.validate`, dataToModifier(data), document, currentUser, validationErrors));
 
     if (validationErrors.length) {
       // eslint-disable-next-line no-console
@@ -265,7 +267,7 @@ export const updateMutator = async ({ collection, selector, data, set = {}, unse
   return { data: newDocument };
 }
 
-export const deleteMutator = async ({ collection, selector, currentUser, validate, context, document }) => {
+export const deleteMutator = async ({ collection, documentId, selector, currentUser, validate, context, document }) => {
 
   const { collectionName, typeName } = collection.options;
 
@@ -275,6 +277,9 @@ export const deleteMutator = async ({ collection, selector, currentUser, validat
   debug('// selector: ', selector);
 
   const schema = collection.simpleSchema()._schema;
+
+  // OpenCRUD backwards compatibility
+  selector = selector || { _id: documentId };
 
   if (isEmpty(selector)) {
     throw new Error(`Selector cannot be empty`);
@@ -291,7 +296,7 @@ export const deleteMutator = async ({ collection, selector, currentUser, validat
     document = await runCallbacks({ name: `${typeName.toLowerCase()}.delete.validate`, iterator: document, properties: { currentUser, collection }});
     document = await runCallbacks({ name: `*.delete.validate`, iterator: document, properties: { currentUser, collection }});
     // OpenCRUD backwards compatibility
-    document = runCallbacks(`${collectionName.toLowerCase()}.remove.validate`, document, currentUser);
+    document = await runCallbacks(`${collectionName.toLowerCase()}.remove.validate`, document, currentUser);
   }
 
   // run onRemove step
