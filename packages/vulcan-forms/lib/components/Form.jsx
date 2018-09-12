@@ -711,15 +711,22 @@ class SmartForm extends Component {
   On form success we'll clear current values too. Note: document includes currentValues
 
   */
-  clearForm = ({ clearErrors = true, clearCurrentValues = false, clearDeletedValues = false, document }) => {
+  clearForm = ({
+    clearErrors = true,
+    clearCurrentValues = false,
+    clearCurrentDocument = clearCurrentValues, // default to clearCurrentValues for backwards compatibility
+    clearDeletedValues = false,
+    clearInitialDocument = !clearCurrentValues, // default to !clearCurrentValues for backwards compatibility
+    document
+  }) => {
     document = document ? merge({}, this.props.prefilledProps, document) : null;
 
     this.setState(prevState => ({
       errors: clearErrors ? [] : prevState.errors,
       currentValues: clearCurrentValues ? {} : prevState.currentValues,
-      currentDocument: clearCurrentValues ? {} : prevState.currentDocument,
+      currentDocument: clearCurrentDocument ? {} : prevState.currentDocument,
       deletedValues: clearDeletedValues ? [] : prevState.deletedValues,
-      initialDocument: document && !clearCurrentValues ? document : prevState.initialDocument,
+      initialDocument: document && clearInitialDocument ? document : prevState.initialDocument,
       disabled: false,
     }));
   };
@@ -740,10 +747,11 @@ class SmartForm extends Component {
   };
 
   editMutationSuccessCallback = result => {
-    this.mutationSuccessCallback(result, 'edit');
+    this.mutationSuccessCallback(result, 'edit', { clearCurrentDocument: false, clearInitialDocument: true });
   };
 
-  mutationSuccessCallback = (result, mutationType, { clearCurrentValues } = {}) => {
+  mutationSuccessCallback = (result, mutationType, options = {}) => {
+    const { clearCurrentDocument, clearInitialDocument } = options;
 
     this.setState(prevState => ({ disabled: false }));
     const document = result.data[Object.keys(result.data)[0]].data; // document is always on first property
@@ -755,7 +763,14 @@ class SmartForm extends Component {
     // (we are in an async callback, everything can happen!)
     if (this.form) {
       this.form.reset(this.getDocument());
-      this.clearForm({ clearErrors: true, clearCurrentValues, clearDeletedValues: true, document });
+      this.clearForm({
+        clearErrors: true,
+        clearCurrentValues: true,
+        clearCurrentDocument,
+        clearDeletedValues: true,
+        clearInitialDocument,
+        document,
+      });
     }
 
     // run document through mutation success callbacks
