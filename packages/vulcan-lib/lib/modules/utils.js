@@ -498,3 +498,20 @@ Utils.isPromise = value => isFunction(get(value, 'then'));
 Utils.pluralize = s => {
   return s.slice(-1) === 'y' ? `${s.slice(0,-1)}ies` : `${s}s`;
 }
+
+/**
+ * Handles an argument list and returns it as an object.
+ *
+ * Performs one of the following:
+ *  - returns first argument if it is an object and there are no more arguments
+ *  - keys each argument with the corresponding key in the keys array
+ *
+ * @param {String[]} keys
+ * @param {*[]} args
+ */
+Utils.argsAsObject = function argsAsObject(keys, args) {
+  if (typeof args[0] === 'object' && args.length === 1) {
+    return args[0];
+  }
+  return args.reduce((acc, arg, index) => ({ ...acc, [keys[index]]: arg }), {});
+};
