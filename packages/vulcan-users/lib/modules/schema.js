@@ -53,9 +53,10 @@ const schema = {
     type: String,
     optional: true,
     canRead: ['guests'],
-    canCreate: ['guests'],
+    canUpdate: ['admins'],
+    canCreate: ['members'],
     onInsert: user => {
-      if (user.services && user.services.twitter && user.services.twitter.screenName) {
+      if ((!user.username) && user.services && user.services.twitter && user.services.twitter.screenName) {
         return user.services.twitter.screenName;
       }
     },
@@ -69,12 +70,12 @@ const schema = {
     type: Object,
     optional: true,
   },
-  "emails.$.address": {
+  'emails.$.address': {
     type: String,
     regEx: SimpleSchema.RegEx.Email,
     optional: true,
   },
-  "emails.$.verified": {
+  'emails.$.verified': {
     type: Boolean,
     optional: true,
   },
@@ -88,8 +89,8 @@ const schema = {
   },
   isAdmin: {
     type: Boolean,
-    label: "Admin",
-    control: "checkbox",
+    label: 'Admin',
+    control: 'checkbox',
     optional: true,
     canCreate: ['admins'],
     canUpdate: ['admins'],
@@ -98,7 +99,7 @@ const schema = {
   },
   locale: {
     type: String,
-    label: "Preferred Language",
+    label: 'Preferred Language',
     optional: true,
     control: 'select',
     canCreate: ['members'],
@@ -110,7 +111,7 @@ const schema = {
     type: Object,
     optional: true,
     blackbox: true,
-    canCreate: ['guests'],
+    canCreate: ['members'],
   },
   // // telescope-specific data, kept for backward compatibility and migration purposes
   // telescope: {
@@ -130,7 +131,7 @@ const schema = {
   displayName: {
     type: String,
     optional: true,
-    control: "text",
+    control: 'text',
     canCreate: ['members'],
     canUpdate: ['members'],
     canRead: ['guests'],
@@ -148,8 +149,8 @@ const schema = {
     optional: true,
     regEx: SimpleSchema.RegEx.Email,
     mustComplete: true,
-    control: "text",
-    canCreate: ['guests'],
+    control: 'text',
+    canCreate: ['members'],
     canUpdate: ['members'],
     canRead: ownsOrIsAdmin,
     order: 20,
@@ -202,7 +203,7 @@ const schema = {
       fieldName: 'avatarUrl',
       type: 'String',
       resolver: async (user, args, { Users }) => {
- 
+
         if (_.isEmpty(user)) return null;
 
         if (user.avatarUrl) {
@@ -213,7 +214,7 @@ const schema = {
           const fullUser = await Users.loader.load(user._id);
           return Users.avatar.getUrl(fullUser);
         }
-        
+
       }
     }
   },
@@ -232,13 +233,13 @@ const schema = {
       return Utils.getUnusedSlugByCollectionName('Users', basicSlug);
     }
   },
-    /**
-    The user's Twitter username
-  */
+  /**
+  The user's Twitter username
+*/
   twitterUsername: {
     type: String,
     optional: true,
-    control: "text",
+    control: 'text',
     canCreate: ['members'],
     canUpdate: ['members'],
     canRead: ['guests'],
@@ -261,15 +262,15 @@ const schema = {
   groups: {
     type: Array,
     optional: true,
-    control: "checkboxgroup",
+    control: 'checkboxgroup',
     canCreate: ['admins'],
     canUpdate: ['admins'],
     canRead: ['guests'],
     group: adminGroup,
     form: {
       options: function () {
-        const groups = _.without(_.keys(getCollection('Users').groups), "guests", "members", "admins");
-        return groups.map(group => {return {value: group, label: group};});
+        const groups = _.without(_.keys(getCollection('Users').groups), 'guests', 'members', 'admins');
+        return groups.map(group => { return { value: group, label: group }; });
       }
     },
   },
@@ -289,7 +290,7 @@ const schema = {
       resolver: (user, args, { Users }) => {
         return Users.getProfileUrl(user, true);
       },
-    }  
+    }
   },
 
   editUrl: {
@@ -301,7 +302,7 @@ const schema = {
       resolver: (user, args, { Users }) => {
         return Users.getEditUrl(user, true);
       },
-    }  
+    }
   }
 
 };

@@ -18,11 +18,15 @@ import { selectorInputTemplate, mainTypeTemplate, createInputTemplate, createDat
 disableFragmentWarnings();
 
 // get GraphQL type for a given schema and field name
-const getGraphQLType = (schema, fieldName) => {
+const getGraphQLType = (schema, fieldName, isInput = false) => {
 
   const field = schema[fieldName];
   const type = field.type.singleType;
   const typeName = typeof type === 'object' ? 'Object' : typeof type === 'function' ? type.name : type;
+
+  if (field.isIntlData) {
+    return isInput ? '[IntlValueInput]' : '[IntlValue]';
+  }
 
   switch (typeName) {
 
@@ -121,7 +125,7 @@ export const GraphQLSchema = {
     this.directives = deepmerge(this.directives, directive);
   },
   
-  // for a given schema, return main type fields, selector fields, 
+  // for a given schema, return main type fields, selector fields,
   // unique selector fields, orderBy fields, creatable fields, and updatable fields
   getFields(schema, typeName) {
     const fields = {
@@ -137,6 +141,7 @@ export const GraphQLSchema = {
 
       const field = schema[fieldName];
       const fieldType = getGraphQLType(schema, fieldName);
+      const inputFieldType = getGraphQLType(schema, fieldName, true);
 
       // only include fields that are viewable/insertable/editable and don't contain "$" in their name
       // note: insertable/editable fields must be included in main schema in case they're returned by a mutation
@@ -144,7 +149,7 @@ export const GraphQLSchema = {
       if ((field.canRead || field.canCreate || field.canUpdate || field.viewableBy || field.insertableBy || field.editableBy) && fieldName.indexOf('$') === -1) {
 
         const fieldDescription = field.description;
-        const fieldDirective = isIntlField(field) ? `@intl` : '';
+        const fieldDirective = isIntlField(field) ? '@intl' : '';
         const fieldArguments = isIntlField(field) ? [{ name: 'locale', type: 'String' }] : [];
 
         // if field has a resolveAs, push it to schema
@@ -202,7 +207,7 @@ export const GraphQLSchema = {
         if (field.canCreate || field.insertableBy) {
           fields.create.push({
             name: fieldName,
-            type: fieldType,
+            type: inputFieldType,
             required: !field.optional,
           });
         }
@@ -210,19 +215,29 @@ export const GraphQLSchema = {
         if (field.canUpdate || field.editableBy) {
           fields.update.push({
             name: fieldName,
-            type: fieldType,
+            type: inputFieldType,
           });
         }
 
         // if field is i18nized, add foo_intl field containing all languages
         if (isIntlField(field)) {
-          fields.mainType.push({ name: `${fieldName}_intl`, type: `[IntlValue]` });
-          fields.create.push({ name: `${fieldName}_intl`, type: `[IntlValueInput]` });
-          fields.update.push({ name: `${fieldName}_intl`, type: `[IntlValueInput]` });
+          fields.mainType.push({ name: `${fieldName}_intl`, type: '[IntlValue]' });
+          fields.create.push({ name: `${fieldName}_intl`, type: '[IntlValueInput]' });
+          fields.update.push({ name: `${fieldName}_intl`, type: '[IntlValueInput]' });
         }
 
         if (field.selectable) {
-          // TODO
+          fields.selector.push({
+            name: fieldName,
+            type: inputFieldType,
+          });
+        }
+
+        if (field.selectable && field.unique) {
+          fields.selectorUnique.push({
+            name: fieldName,
+            type: inputFieldType,
+          });
         }
 
         if (field.orderable) {
@@ -284,13 +299,13 @@ export const GraphQLSchema = {
         const queryResolvers = {};
   
         // single
-        if (resolvers.single) { 
+        if (resolvers.single) {
           addGraphQLQuery(singleQueryTemplate({ typeName }), resolvers.single.description);
           queryResolvers[Utils.camelCaseify(typeName)] = resolvers.single.resolver.bind(resolvers.single);
         }
   
         // multi
-        if (resolvers.multi) { 
+        if (resolvers.multi) {
           addGraphQLQuery(multiQueryTemplate({ typeName }), resolvers.multi.description);
           queryResolvers[Utils.camelCaseify(Utils.pluralize(typeName))] = resolvers.multi.resolver.bind(resolvers.multi);
         }
@@ -322,7 +337,7 @@ export const GraphQLSchema = {
         }
         addGraphQLResolvers({ Mutation: { ...mutationResolvers } });
       }
-      graphQLSchema = schemaFragments.join('\n\n') + `\n\n\n`;
+      graphQLSchema = schemaFragments.join('\n\n') + '\n\n\n';
 
     } else {
       // eslint-disable-next-line no-console

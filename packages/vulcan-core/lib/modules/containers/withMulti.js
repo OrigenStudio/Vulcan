@@ -1,12 +1,11 @@
 /*
 
-### withList
+### withMulti
 
 Paginated items container
 
 Options: 
 
-  - queryName: an arbitrary name for the query
   - collection: the collection to fetch the documents from
   - fragment: the fragment that defines which properties to fetch
   - fragmentName: the name of the fragment, passed to getFragment
@@ -39,39 +38,30 @@ import React, { Component } from 'react';
 import { withApollo, graphql } from 'react-apollo';
 import gql from 'graphql-tag';
 import update from 'immutability-helper';
-import { getSetting, getFragment, getFragmentName, getCollection, Utils, multiClientTemplate } from 'meteor/vulcan:lib';
+import { getSetting, Utils, multiClientTemplate } from 'meteor/vulcan:lib';
 import Mingo from 'mingo';
 import compose from 'recompose/compose';
 import withState from 'recompose/withState';
 import find from 'lodash/find';
 
+import { extractCollectionInfo, extractFragmentInfo } from './handleOptions';
+
 export default function withMulti(options) {
   // console.log(options)
 
   const {
-    collectionName,
     limit = 10,
     pollInterval = getSetting('pollInterval', 20000),
     enableTotal = true,
     enableCache = false,
-    extraQueries,
+    extraQueries
   } = options;
 
-  const collection = options.collection || getCollection(collectionName);
+  const { collectionName, collection } = extractCollectionInfo(options);
+  const { fragmentName, fragment } = extractFragmentInfo(options, collectionName);
+
   const typeName = collection.options.typeName;
-  const resolverName = Utils.camelCaseify(Utils.pluralize(typeName));
-
-  let fragment;
-
-  if (options.fragment) {
-    fragment = options.fragment;
-  } else if (options.fragmentName) {
-    fragment = getFragment(options.fragmentName);
-  } else {
-    fragment = getFragment(`${collection.options.collectionName}DefaultFragment`);
-  }
-
-  const fragmentName = getFragmentName(fragment);
+  const resolverName = collection.options.multiResolverName;
 
   // build graphql query from options
   const query = gql`
@@ -89,7 +79,7 @@ export default function withMulti(options) {
       const paginationLimit = (props.terms && props.terms.limit) || limit;
       const paginationTerms = {
         limit: paginationLimit,
-        itemsPerPage: paginationLimit,
+        itemsPerPage: paginationLimit
       };
 
       return paginationTerms;
@@ -112,8 +102,8 @@ export default function withMulti(options) {
               input: {
                 terms: mergedTerms,
                 enableCache,
-                enableTotal,
-              },
+                enableTotal
+              }
             },
             // note: pollInterval can be set to 0 to disable polling (20s by default)
             pollInterval,
@@ -128,7 +118,7 @@ export default function withMulti(options) {
                 resolverName,
                 apolloClient
               );
-            },
+            }
           };
 
           if (options.fetchPolicy) {
@@ -182,8 +172,8 @@ export default function withMulti(options) {
                 typeof providedTerms === 'undefined'
                   ? {
                       /*...props.ownProps.terms,*/ ...props.ownProps.paginationTerms,
-                      limit: results.length + props.ownProps.paginationTerms.itemsPerPage,
-                    }
+                    limit: results.length + props.ownProps.paginationTerms.itemsPerPage
+                  }
                   : providedTerms;
 
               props.ownProps.setPaginationTerms(newTerms);
@@ -199,7 +189,7 @@ export default function withMulti(options) {
                   : providedTerms;
 
               return props.data.fetchMore({
-                variables: { terms: newTerms }, // ??? not sure about 'terms: newTerms'
+                variables: { input: { terms: newTerms } }, // ??? not sure about 'terms: newTerms'
                 updateQuery(previousResults, { fetchMoreResult }) {
                   // no more post to fetch
                   if (!fetchMoreResult.data) {
@@ -209,16 +199,16 @@ export default function withMulti(options) {
                   newResults[resolverName] = [...previousResults[resolverName], ...fetchMoreResult.data[resolverName]];
                   // return the previous results "augmented" with more
                   return { ...previousResults, ...newResults };
-                },
+                }
               });
             },
 
             fragmentName,
             fragment,
             ...props.ownProps, // pass on the props down to the wrapped component
-            data: props.data,
+            data: props.data
           };
-        },
+        }
       }
     )
   );
@@ -244,7 +234,7 @@ const queryReducer = (typeName, previousResults, action, collection, mergedTerms
     const listWithoutDocument = data[resolverName].results.filter(doc => doc._id !== document._id);
     const currentTotalCount = data[resolverName].totalCount;
     const newResults = update(data, {
-      [resolverName]: { $set: { results: listWithoutDocument, totalCount: currentTotalCount - 1 } },
+      [resolverName]: { $set: { results: listWithoutDocument, totalCount: currentTotalCount - 1 } }
     });
     return newResults;
   };
@@ -254,7 +244,7 @@ const queryReducer = (typeName, previousResults, action, collection, mergedTerms
     const listWithDocument = [...data[resolverName].results, document];
     const currentTotalCount = data[resolverName].totalCount;
     const newResults = update(data, {
-      [resolverName]: { $set: { results: listWithDocument, totalCount: currentTotalCount + 1 } },
+      [resolverName]: { $set: { results: listWithDocument, totalCount: currentTotalCount + 1 } }
     });
     return newResults;
   };
@@ -333,7 +323,7 @@ const queryReducer = (typeName, previousResults, action, collection, mergedTerms
     [resolverName]: {
       results: [...newResults[resolverName].results],
       totalCount: newResults[resolverName].totalCount,
-      __typename: `Multi${typeName}Output`,
-    },
+      __typename: `Multi${typeName}Output`
+    }
   };
 };

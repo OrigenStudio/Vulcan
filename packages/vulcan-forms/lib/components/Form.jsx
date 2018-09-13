@@ -44,7 +44,6 @@ import unset from 'lodash/unset';
 import compact from 'lodash/compact';
 import update from 'lodash/update';
 import merge from 'lodash/merge';
-import mergeWith from 'lodash/mergeWith';
 import find from 'lodash/find';
 import pick from 'lodash/pick';
 import isEqual from 'lodash/isEqual';
@@ -52,6 +51,8 @@ import isEqualWith from 'lodash/isEqualWith';
 import uniq from 'lodash/uniq';
 import uniqBy from 'lodash/uniqBy';
 import isObject from 'lodash/isObject';
+import mapValues from 'lodash/mapValues';
+import pickBy from 'lodash/pickBy';
 
 import { convertSchema, formProperties } from '../modules/schema_utils';
 import { isEmptyValue } from '../modules/utils';
@@ -72,18 +73,29 @@ const compactParent = (object, path) => {
   update(object, parentPath, compactIfArray);
 };
 
+const getDefaultValues = convertedSchema => {
+  // TODO: make this work with nested schemas, too
+  return pickBy(mapValues(convertedSchema, field => field.defaultValue), value => value);
+}
+
 const getInitialStateFromProps = (nextProps) => {
   const collection = nextProps.collection || getCollection(nextProps.collectionName);
   const schema = collection.simpleSchema();
-  // we need to clone object passed from props otherwise they'll be immutable
-  const initialDocument = merge({}, nextProps.prefilledProps, nextProps.document);
+  const convertedSchema = convertSchema(schema);
+  const formType = nextProps.document ? 'edit' : 'new';
+  // for new document forms, add default values to initial document
+  const defaultValues = formType === 'new' ? getDefaultValues(convertedSchema) : {};
+  const initialDocument = merge({}, defaultValues, nextProps.prefilledProps, nextProps.document);
+  // remove all instances of the `__typename` property from document
+  Utils.removeProperty(initialDocument, '__typename');
+
   return {
     disabled: false,
     errors: [],
     deletedValues: [],
     currentValues: {},
     // convert SimpleSchema schema into JSON object
-    schema: convertSchema(schema),
+    schema: convertedSchema,
     // Also store all field schemas (including nested schemas) in a flat structure
     flatSchema: convertSchema(schema, true),
     // the initial document passed as props
@@ -215,7 +227,7 @@ class SmartForm extends Component {
         - Nested array item: 'addresses.1.city'
 
         */
-       compactParent(data, path);
+        compactParent(data, path);
       }
     });
 
@@ -560,10 +572,10 @@ class SmartForm extends Component {
 
     // default to overwriting old value with new
     const { mode = 'overwrite' } = options;
-    
+
     // keep the previous ones and extend (with possible replacement) with new ones
     this.setState(prevState => {
-      
+
       // keep only the relevant properties
       const { currentValues, currentDocument, deletedValues } = cloneDeep(prevState);
       const newState = { currentValues, currentDocument, deletedValues, foo: {} };
@@ -699,14 +711,22 @@ class SmartForm extends Component {
   On form success we'll clear current values too. Note: document includes currentValues
 
   */
-  clearForm = ({ clearErrors = true, clearCurrentValues = false, clearDeletedValues = false, document }) => {
+  clearForm = ({
+    clearErrors = true,
+    clearCurrentValues = false,
+    clearCurrentDocument = clearCurrentValues, // default to clearCurrentValues for backwards compatibility
+    clearDeletedValues = false,
+    clearInitialDocument = !clearCurrentValues, // default to !clearCurrentValues for backwards compatibility
+    document
+  }) => {
     document = document ? merge({}, this.props.prefilledProps, document) : null;
 
     this.setState(prevState => ({
       errors: clearErrors ? [] : prevState.errors,
       currentValues: clearCurrentValues ? {} : prevState.currentValues,
+      currentDocument: clearCurrentDocument ? {} : prevState.currentDocument,
       deletedValues: clearDeletedValues ? [] : prevState.deletedValues,
-      initialDocument: document && !clearCurrentValues ? document : prevState.initialDocument,
+      initialDocument: document && clearInitialDocument ? document : prevState.initialDocument,
       disabled: false,
     }));
   };
@@ -723,14 +743,15 @@ class SmartForm extends Component {
   };
 
   newMutationSuccessCallback = result => {
-    this.mutationSuccessCallback(result, 'new');
+    this.mutationSuccessCallback(result, 'new', { clearCurrentValues: true });
   };
 
   editMutationSuccessCallback = result => {
-    this.mutationSuccessCallback(result, 'edit');
+    this.mutationSuccessCallback(result, 'edit', { clearCurrentDocument: false, clearInitialDocument: true });
   };
 
-  mutationSuccessCallback = (result, mutationType) => {
+  mutationSuccessCallback = (result, mutationType, options = {}) => {
+    const { clearCurrentDocument, clearInitialDocument } = options;
 
     this.setState(prevState => ({ disabled: false }));
     const document = result.data[Object.keys(result.data)[0]].data; // document is always on first property
@@ -742,7 +763,14 @@ class SmartForm extends Component {
     // (we are in an async callback, everything can happen!)
     if (this.form) {
       this.form.reset(this.getDocument());
-      this.clearForm({ clearErrors: true, clearCurrentValues: true, clearDeletedValues: true, document });
+      this.clearForm({
+        clearErrors: true,
+        clearCurrentValues: true,
+        clearCurrentDocument,
+        clearDeletedValues: true,
+        clearInitialDocument,
+        document,
+      });
     }
 
     // run document through mutation success callbacks
@@ -798,7 +826,7 @@ class SmartForm extends Component {
 
     // if there's a submit callback, run it
     if (this.props.submitCallback) {
-      data = this.props.submitCallback(data);
+      data = this.props.submitCallback(data) || data;
     }
 
     if (this.getFormType() === 'new') {
@@ -886,6 +914,9 @@ class SmartForm extends Component {
             document={this.getDocument()}
             deleteDocument={(this.getFormType() === 'edit' && this.props.showRemove && this.deleteDocument) || null}
             collectionName={collectionName}
+            currentValues={this.state.currentValues}
+            deletedValues={this.state.deletedValues}
+            errors={this.state.errors}
           />
         </Formsy.Form>
       </div>

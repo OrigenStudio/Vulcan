@@ -94,13 +94,12 @@ export function getDefaultResolvers(options) {
       description: `A single ${typeName} document fetched by ID or slug`,
 
       async resolver(root, { input = {} }, context, { cacheControl }) {
-        const { selector = {}, enableCache = false } = input;
-        const { documentId, slug } = selector;
+        const { selector = {}, enableCache = false, allowNull = false } = input;
 
         debug('');
         debugGroup(`--------------- start \x1b[35m${typeName} Single Resolver\x1b[0m ---------------`);
         debug(`Options: ${JSON.stringify(resolverOptions)}`);
-        debug(`DocumentId: ${documentId}, Slug: ${slug}`);
+        debug(`Selector: ${JSON.stringify(selector)}`);
 
         if (cacheControl && enableCache) {
           const maxAge = resolverOptions.cacheMaxAge || defaultOptions.cacheMaxAge;
@@ -110,16 +109,19 @@ export function getDefaultResolvers(options) {
         const { currentUser, Users } = context;
         const collection = context[collectionName];
 
-        // don't use Dataloader if doc is selected by slug
+        // use Dataloader if doc is selected by documentId/_id
+        const documentId = selector.documentId || selector._id;
         const doc = documentId
           ? await collection.loader.load(documentId)
-          : slug
-            ? await Connectors.get(collection, { slug })
-            : await Connectors.get(collection);
+          : await Connectors.get(collection, selector);
 
         if (!doc) {
-          const MissingDocumentError = createError('app.missing_document', { message: 'app.missing_document' });
-          throw new MissingDocumentError({ data: { documentId, slug } });
+          if (allowNull) {
+            return { result: null };
+          } else {
+            const MissingDocumentError = createError('app.missing_document', { message: 'app.missing_document' });
+            throw new MissingDocumentError({ data: { documentId } });
+          }
         }
 
         // if collection has a checkAccess function defined, use it to perform a check on the current document

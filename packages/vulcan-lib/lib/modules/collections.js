@@ -6,7 +6,7 @@ import { runCallbacks, runCallbacksAsync } from './callbacks.js';
 import { getSetting, registerSetting } from './settings.js';
 import { registerFragment, getDefaultFragmentText } from './fragments.js';
 import escapeStringRegexp from 'escape-string-regexp';
-import { validateIntlField, getIntlString } from './intl';
+import { validateIntlField, getIntlString, isIntlField } from './intl';
 
 const wrapAsync = (Meteor.wrapAsync)? Meteor.wrapAsync : Meteor._wrapAsync;
 // import { debug } from './debug.js';
@@ -37,7 +37,7 @@ Mongo.Collection.prototype.attachSchema = function (schemaOrFields) {
   } else {
     this.simpleSchema().extend(schemaOrFields)
   }
-}
+};
 
 /**
  * @summary Add an additional field (or an array of fields) to a schema.
@@ -106,8 +106,8 @@ Mongo.Collection.prototype.helpers = function(helpers) {
   var self = this;
 
   if (self._transform && !self._helpers)
-    throw new Meteor.Error("Can't apply helpers to '" +
-      self._name + "' a transform function already exists!");
+    throw new Meteor.Error('Can\'t apply helpers to \'' +
+      self._name + '\' a transform function already exists!');
 
   if (!self._helpers) {
     self._helpers = function Document(doc) { return _.extend(this, doc); };
@@ -131,31 +131,51 @@ export const createCollection = options => {
   // decorate collection with options
   collection.options = options;
 
-  // add typeName
+  // add typeName if missing
   collection.typeName = typeName;
+  collection.options.typeName = typeName;
+  collection.options.singleResolverName = Utils.camelCaseify(typeName);
+  collection.options.multiResolverName = Utils.camelCaseify(Utils.pluralize(typeName));
 
+  // add collectionName if missing
+  collection.collectionName = collectionName;
+  collection.options.collectionName = collectionName;
+  
   // add views
   collection.views = [];
 
   // generate foo_intl fields
   Object.keys(schema).forEach(fieldName => {
     const fieldSchema = schema[fieldName];
-    if (fieldSchema.intl || (fieldSchema.type && fieldSchema.type.name === 'IntlString')) {
+    if (isIntlField(fieldSchema)) {
 
       // we have at least one intl field
       hasIntlFields = true;
 
+      // remove `intl` to avoid treating new _intl field as a field to internationalize
+      // eslint-disable-next-line no-unused-vars
+      const { intl, ...propertiesToCopy } = schema[fieldName];
+
       schema[`${fieldName}_intl`] = {
-        ...schema[fieldName], // copy properties from regular field
+        ...propertiesToCopy, // copy properties from regular field
         hidden: true,
         type: Array,
-        custom: validateIntlField,
-      }
+        isIntlData: true,
+      };
+
+      delete schema[`${fieldName}_intl`].intl;
+
       schema[`${fieldName}_intl.$`] = {
         type: getIntlString(),
+      };
+
+      // if original field is required, enable custom validation function instead of `optional` property
+      if (!schema[fieldName].optional) {
+        schema[`${fieldName}_intl`].optional = true;
+        schema[`${fieldName}_intl`].custom = validateIntlField;
       }
 
-      // make non-intl field optional
+      // make original non-intl field optional
       schema[fieldName].optional = true;
     }
   });
@@ -175,7 +195,7 @@ export const createCollection = options => {
     addGraphQLCollection(collection);
   }
 
-  runCallbacksAsync({ name: `*.collection`, properties: { options } });
+  runCallbacksAsync({ name: '*.collection', properties: { options } });
   runCallbacksAsync({ name: `${collectionName}.collection`, properties: { options } });
 
   // ------------------------------------- Default Fragment -------------------------------- //
@@ -270,9 +290,9 @@ export const createCollection = options => {
     // console.log(parameters);
 
     return parameters;
-  }
+  };
 
   Collections.push(collection);
 
   return collection;
-}
+};
