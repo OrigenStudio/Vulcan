@@ -59,9 +59,22 @@ VulcanEmail.generateTextVersion = html => {
   });
 }
 
-VulcanEmail.send = (to, cc, bcc, replyTo, subject, html, text, throwErrors) => {
+VulcanEmail.send = (to, subject, html, text, throwErrors, cc, bcc, replyTo) => {
   // TODO: limit who can send emails
   // TODO: fix this error: Error: getaddrinfo ENOTFOUND
+  
+  if(typeof to === 'object'){
+    var {
+      to,
+      cc,
+      bcc,
+      replyTo,
+      subject,
+      html,
+      text,
+      throwErrors,
+    } = to;
+  }
 
   const from = getSetting('defaultEmail', 'noreply@example.com');
   const siteName = getSetting('title', 'Vulcan');
@@ -136,7 +149,7 @@ VulcanEmail.build = async ({ emailName, variables, locale }) => {
 
 VulcanEmail.buildAndSend = async ({ to, cc, bcc, replyTo, emailName, variables, locale = getSetting("locale") }) => {
   const email = await VulcanEmail.build({ to, emailName, variables, locale });
-  return VulcanEmail.send(to, cc, bcc, replyTo, email.subject, email.html);
+  return VulcanEmail.send({to, cc, bcc, replyTo, subject: email.subject, html: email.html});
 };
 
-VulcanEmail.buildAndSendHTML = (to, subject, html) => VulcanEmail.send(to,'','','', subject, VulcanEmail.buildTemplate(html));
+VulcanEmail.buildAndSendHTML = (to, subject, html) => VulcanEmail.send(to, subject, VulcanEmail.buildTemplate(html));
