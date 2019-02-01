@@ -85,19 +85,6 @@ VulcanEmail.generateTextVersion = html => {
 VulcanEmail.send = (to, subject, html, text, throwErrors, cc, bcc, replyTo, headers) => {
   // TODO: limit who can send emails
   // TODO: fix this error: Error: getaddrinfo ENOTFOUND
-  
-  if(typeof to === 'object'){
-    var {
-      to,
-      cc,
-      bcc,
-      replyTo,
-      subject,
-      html,
-      text,
-      throwErrors,
-    } = to;
-  }
 
   if (typeof to === 'object') {
     // eslint-disable-next-line no-redeclare
@@ -112,7 +99,6 @@ VulcanEmail.send = (to, subject, html, text, throwErrors, cc, bcc, replyTo, head
     // Auto-generate text version if it doesn't exist. Has bugs, but should be good enough.
     text = VulcanEmail.generateTextVersion(html);
   }
-
   const email = {
     from: from,
     to: to,
